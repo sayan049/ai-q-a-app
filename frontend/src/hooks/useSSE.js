@@ -2,10 +2,10 @@
 import { useCallback } from 'react'
 import { useChatStore } from '../store/chatStore'
 
-// In production (Render), VITE_API_URL is the backend URL
-// In local Docker, we use relative path (Nginx handles routing)
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/v1`
+// Strip trailing slash to prevent double-slash URLs
+const RAW_URL = import.meta.env.VITE_API_URL || ''
+const API_BASE = RAW_URL
+  ? `${RAW_URL.replace(/\/$/, '')}/api/v1`
   : '/api/v1'
 
 export function useSSE() {
@@ -58,34 +58,24 @@ export function useSSE() {
             if (!jsonStr) continue
             try {
               const data = JSON.parse(jsonStr)
-
               if (data.error) {
-                finishStreaming(
-                  `❌ ${data.error}`,
-                  [], [], 'error-' + Date.now()
-                )
+                finishStreaming(`❌ ${data.error}`, [], [], 'error-' + Date.now())
                 return
               }
-
               if (data.done) {
                 finishStreaming(
                   data.full_response || '',
-                  data.timestamps   || [],
-                  data.sources      || [],
-                  data.message_id   || Date.now().toString(),
+                  data.timestamps    || [],
+                  data.sources       || [],
+                  data.message_id    || Date.now().toString(),
                 )
                 return
               }
-
-              if (data.token) {
-                appendToken(data.token)
-              }
-
-            } catch { /* skip malformed JSON lines */ }
+              if (data.token) appendToken(data.token)
+            } catch { /* skip malformed */ }
           }
         }
       }
-
     } catch (err) {
       finishStreaming(
         `❌ Connection error: ${err.message}`,
