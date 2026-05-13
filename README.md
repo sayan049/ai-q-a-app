@@ -24,7 +24,7 @@
 |---|---|
 | **Live Application** | https://ai-q-a-app.onrender.com |
 | **API Documentation** | https://aiqa-backend-ek1k.onrender.com/api/docs |
-| **Walkthrough Video** | YouTube / Google Drive Link |
+| **Walkthrough Video** | https://drive.google.com/file/d/1HBXer6_iL4JruqFG70okTeX7ERoVkioD/view?usp=sharing |
 
 > ⚠️ **Note:** The backend is hosted on Render's free tier. Please allow **30-60 seconds** for the initial cold start.
 
