@@ -59,14 +59,24 @@ export const useFileStore = create((set, get) => ({
     }
   },
 
-  pollFileStatus: (fileId) => {
+pollFileStatus: (fileId) => {
     let attempts = 0
-    const maxAttempts = 40 // 2 minutes max polling
+    const maxAttempts = 60  // 5 minutes max (was 40)
+    const interval = 5000   // every 5 seconds (was 3 seconds)
 
-    const interval = setInterval(async () => {
+    const timer = setInterval(async () => {
       attempts++
+
       if (attempts > maxAttempts) {
-        clearInterval(interval)
+        clearInterval(timer)
+        // Mark as failed if never became ready
+        set((state) => ({
+          files: state.files.map((f) =>
+            f.id === fileId
+              ? { ...f, status: 'failed', error_message: 'Processing timed out' }
+              : f
+          ),
+        }))
         return
       }
 
@@ -85,12 +95,12 @@ export const useFileStore = create((set, get) => ({
         }))
 
         if (updated.status === 'ready' || updated.status === 'failed') {
-          clearInterval(interval)
+          clearInterval(timer)
         }
       } catch {
-        clearInterval(interval)
+        // Don't stop polling on network error
       }
-    }, 3000)
+    }, interval)
   },
 
   setActiveFile: (file) => set({ activeFile: file }),
