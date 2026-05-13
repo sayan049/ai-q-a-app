@@ -1,15 +1,27 @@
+// frontend/src/hooks/useSSE.js
 import { useCallback } from 'react'
 import { useChatStore } from '../store/chatStore'
 
+// In production (Render), VITE_API_URL is the backend URL
+// In local Docker, we use relative path (Nginx handles routing)
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1'
+
 export function useSSE() {
-  const { addUserMessage, startStreaming, appendToken, finishStreaming } = useChatStore()
+  const {
+    addUserMessage,
+    startStreaming,
+    appendToken,
+    finishStreaming,
+  } = useChatStore()
 
   const streamQuestion = useCallback(async (query, fileId) => {
     addUserMessage(query)
     startStreaming()
 
     const token = localStorage.getItem('access_token')
-    const url = `/api/v1/chat/ask?query=${encodeURIComponent(query)}&file_id=${encodeURIComponent(fileId)}`
+    const url = `${API_BASE}/chat/ask?query=${encodeURIComponent(query)}&file_id=${encodeURIComponent(fileId)}`
 
     try {
       const response = await fetch(url, {
@@ -28,7 +40,7 @@ export function useSSE() {
         return
       }
 
-      const reader = response.body.getReader()
+      const reader  = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
 
@@ -46,26 +58,34 @@ export function useSSE() {
             if (!jsonStr) continue
             try {
               const data = JSON.parse(jsonStr)
+
               if (data.error) {
-                finishStreaming(`❌ ${data.error}`, [], [], 'error-' + Date.now())
-                return
-              }
-              if (data.done) {
                 finishStreaming(
-                  data.full_response || '',
-                  data.timestamps || [],
-                  data.sources || [],
-                  data.message_id || Date.now().toString(),
+                  `❌ ${data.error}`,
+                  [], [], 'error-' + Date.now()
                 )
                 return
               }
+
+              if (data.done) {
+                finishStreaming(
+                  data.full_response || '',
+                  data.timestamps   || [],
+                  data.sources      || [],
+                  data.message_id   || Date.now().toString(),
+                )
+                return
+              }
+
               if (data.token) {
                 appendToken(data.token)
               }
-            } catch { /* skip malformed */ }
+
+            } catch { /* skip malformed JSON lines */ }
           }
         }
       }
+
     } catch (err) {
       finishStreaming(
         `❌ Connection error: ${err.message}`,
