@@ -10,6 +10,7 @@ from app.models.file_record import FileRecord, FileStatus, FileType, ChunkMetada
 from app.services.pdf_service import extract_text_from_pdf, get_pdf_metadata
 from app.services.transcription import transcribe
 from app.services.vector_service import vector_service
+from app.services.storage_service import download_file_for_processing  # ← MOVED HERE
 from app.utils.text_chunker import (
     chunk_pdf_pages,
     chunk_segments_with_timestamps,
@@ -34,12 +35,12 @@ async def _get_local_file_path(file_record: FileRecord, file_path: str) -> str:
     # Case 2: File is on Cloudinary — download it
     if file_record.cloudinary_url:
         logger.info(f"Downloading from Cloudinary: {file_record.cloudinary_url}")
-        from app.services.storage_service import download_file_for_processing
 
         ext = file_record.filename.rsplit(".", 1)[-1] if "." in file_record.filename else "bin"
         tmp_dir = tempfile.mkdtemp()
         local_path = os.path.join(tmp_dir, f"processing.{ext}")
 
+        # Uses top-level import — now patchable in tests
         await download_file_for_processing(
             url=file_record.cloudinary_url,
             local_path=local_path,
@@ -69,17 +70,15 @@ async def process_file(
         logger.error(f"FileRecord {file_id} not found")
         return
 
-    # Track if we created a temp file that needs cleanup
     temp_file_path = None
 
     try:
         file_record.status = FileStatus.PROCESSING
         await file_record.save()
 
-        # ── Resolve local file path (download from Cloudinary if needed) ──────
+        # ── Resolve local file path ───────────────────────────────────────────
         resolved_path = await _get_local_file_path(file_record, file_path)
 
-        # Track temp files for cleanup
         if resolved_path != file_path:
             temp_file_path = resolved_path
             logger.info(f"Using temp file for processing: {resolved_path}")
@@ -94,7 +93,6 @@ async def process_file(
             file_record.page_count = meta.get("page_count", 0)
 
             pages, full_text = extract_text_from_pdf(resolved_path)
-
             chunks = chunk_pdf_pages(pages, chunk_size=500, overlap=50)
 
             logger.info(f"PDF: {len(pages)} pages → {len(chunks)} chunks")
@@ -175,11 +173,10 @@ async def process_file(
             logger.error(f"Failed to save error status: {save_err}")
 
     finally:
-        # ── Cleanup temp file if we downloaded from Cloudinary ────────────────
+        # ── Cleanup temp file downloaded from Cloudinary ──────────────────────
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.remove(temp_file_path)
-                # Remove temp dir too
                 tmp_dir = os.path.dirname(temp_file_path)
                 if os.path.exists(tmp_dir) and not os.listdir(tmp_dir):
                     os.rmdir(tmp_dir)

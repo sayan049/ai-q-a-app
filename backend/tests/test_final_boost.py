@@ -317,17 +317,20 @@ async def test_process_file_extraction_fails(test_user, mock_db, tmp_path):
         mime_type="application/pdf", status=FileStatus.UPLOADING, size_bytes=512,
     ).insert()
 
+    # Create the actual file so _get_local_file_path passes
+    err_path = tmp_path / "err.pdf"
+    err_path.write_bytes(b"fake pdf content")
+
     with patch("app.services.file_processor.get_pdf_metadata", return_value={"page_count": 1}):
         with patch("app.services.file_processor.extract_text_from_pdf",
                    side_effect=ValueError("corrupted")):
             await process_file(
-                "save-error-id", str(tmp_path / "err.pdf"), FileType.PDF, test_user.id
+                "save-error-id", str(err_path), FileType.PDF, test_user.id
             )
 
     updated = await FileRecord.find_one(FileRecord.id == "save-error-id")
     assert updated.status == FileStatus.FAILED
     assert "corrupted" in updated.error_message
-
 
 # ── transcription.py lines 83-84, 164-165 ────────────────────────────────────
 
