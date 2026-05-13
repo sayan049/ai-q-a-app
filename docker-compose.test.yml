@@ -1,0 +1,28 @@
+# docker-compose.test.yml
+version: '3.8'
+
+services:
+  mongodb_test:
+    image: mongo:7
+    container_name: aiqa_mongodb_test
+    # No ports exposed to avoid conflict with dev DB
+
+  redis_test:
+    image: redis:7-alpine
+    container_name: aiqa_redis_test
+
+  backend_test:
+    build: ./backend
+    container_name: aiqa_backend_test
+    environment:
+      - MONGO_URL=mongodb://mongodb_test:27017
+      - MONGO_DB_NAME=test_db
+      - REDIS_URL=redis://redis_test:6379
+      - JWT_SECRET=test-secret-123
+      - GROQ_API_KEY=test-key
+    depends_on:
+      - mongodb_test
+      - redis_test
+    # This command runs the tests and exits with the coverage report
+    command: >
+      sh -c "pytest tests/ --cov=app --cov-config=.coveragerc --cov-report=term-missing"

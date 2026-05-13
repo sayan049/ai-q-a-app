@@ -1,0 +1,28 @@
+# backend/.gitignore
+
+# Environment variables (SENSITIVE)
+.env
+.env.*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# App Data (Uploaded files and generated indexes)
+uploads/*
+!uploads/.gitkeep
+indexes/*
+!indexes/.gitkeep
+
+# OS specific
+.DS_Store
