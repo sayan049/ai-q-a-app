@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     upload_dir: str = Field(default="./uploads", alias="UPLOAD_DIR")
     index_dir: str = Field(default="./indexes", alias="INDEX_DIR")
 
+    # ── Cloudinary (Free file storage) ───────────────────────────────────────
+    cloudinary_cloud_name: str = Field(default="", alias="CLOUDINARY_CLOUD_NAME")
+    cloudinary_api_key: str = Field(default="", alias="CLOUDINARY_API_KEY")
+    cloudinary_api_secret: str = Field(default="", alias="CLOUDINARY_API_SECRET")
+
     class Config:
         env_file = ".env"
         populate_by_name = True
@@ -69,6 +74,15 @@ class Settings(BaseSettings):
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
+
+    @property
+    def cloudinary_enabled(self) -> bool:
+        """Returns True if all Cloudinary credentials are configured."""
+        return bool(
+            self.cloudinary_cloud_name
+            and self.cloudinary_api_key
+            and self.cloudinary_api_secret
+        )
 
 
 @lru_cache()

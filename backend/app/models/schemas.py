@@ -52,7 +52,6 @@ class UserResponse(BaseModel):
 
 # ─── File Schemas ──────────────────────────────────────────────────────────────
 
-
 class FileUploadResponse(BaseModel):
     file_id: str
     user_id: str
@@ -61,6 +60,8 @@ class FileUploadResponse(BaseModel):
     status: str
     size_bytes: int
     message: str
+    cloudinary_url: Optional[str] = None   # ← NEW
+    storage_type: str = "local"             # ← NEW
 
 
 class FileRecordResponse(BaseModel):
@@ -77,6 +78,8 @@ class FileRecordResponse(BaseModel):
     duration: Optional[float] = None
     page_count: Optional[int] = None
     error_message: Optional[str] = None
+    cloudinary_url: Optional[str] = None   # ← NEW
+    storage_type: str = "local"             # ← NEW
 
     model_config = {"from_attributes": True}
 

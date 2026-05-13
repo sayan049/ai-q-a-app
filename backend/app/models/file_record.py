@@ -27,9 +27,9 @@ class ChunkMetadata(Document):
     user_id: str
     chunk_index: int
     text: str
-    start_time: Optional[float] = None   # seconds (audio/video)
-    end_time: Optional[float] = None     # seconds (audio/video)
-    page_num: Optional[int] = None       # PDF pages
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    page_num: Optional[int] = None
     word_count: int = 0
 
     class Settings:
@@ -51,14 +51,19 @@ class FileRecord(Document):
 
     # Content metadata
     chunk_count: int = 0
-    duration: Optional[float] = None      # seconds (audio/video)
-    page_count: Optional[int] = None      # PDF
+    duration: Optional[float] = None
+    page_count: Optional[int] = None
 
-    # File path on disk
+    # File path on disk (used for local storage)
     file_path: str = ""
 
-    # Content hash for dedup
+    # Content hash for deduplication
     file_hash: Optional[str] = None
+
+    # ── Cloudinary Storage Fields ─────────────────────────────────────────────
+    cloudinary_url: Optional[str] = None        # Public URL to access the file
+    cloudinary_public_id: Optional[str] = None  # Used to delete from Cloudinary
+    storage_type: str = "local"                 # "local" or "cloudinary"
 
     class Settings:
         name = "file_records"

@@ -1,3 +1,4 @@
+// frontend/src/pages/Dashboard.jsx
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -36,54 +37,61 @@ function PDFInfo({ file }) {
 }
 
 function MediaPanel({ file, isCollapsed, onToggle }) {
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const { finishStreaming } = useChatStore();
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const { finishStreaming } = useChatStore()
 
   if (!file) return null
 
   const ext = file.filename?.split('.').pop() || 'file'
-  const filePath = `/uploads/${file.user_id}/${file.id}/original.${ext}`
+
+  // ── Key change: prefer Cloudinary URL over local path ─────────────────────
+  // If Cloudinary is configured and file was uploaded there, use the CDN URL.
+  // Otherwise fall back to local FastAPI static file serving.
+  const filePath = file.cloudinary_url
+    ? file.cloudinary_url
+    : `/uploads/${file.user_id}/${file.id}/original.${ext}`
 
   const handleGetSummary = async (e) => {
-    e.stopPropagation(); // Don't trigger collapse
-    if (isSummarizing) return;
-    
-    setIsSummarizing(true);
-    const toastId = toast.loading("Generating AI summary...");
-    
+    e.stopPropagation()
+    if (isSummarizing) return
+
+    setIsSummarizing(true)
+    const toastId = toast.loading("Generating AI summary...")
+
     try {
-      const res = await chatAPI.getSummary(file.id);
-      
-      // Inject the summary as a special AI message into the chat store
-      const summaryMarkdown = `### 📝 AI Summary\n${res.data.summary}\n\n**Key Topics Covered:**\n${res.data.key_topics.map(t => `- ${t}`).join('\n')}`;
-      
+      const res = await chatAPI.getSummary(file.id)
+
+      const summaryMarkdown =
+        `### 📝 AI Summary\n${res.data.summary}\n\n` +
+        `**Key Topics Covered:**\n${res.data.key_topics.map(t => `- ${t}`).join('\n')}`
+
       finishStreaming(
-        summaryMarkdown, 
-        [], // no timestamps for summary
-        [], // no sources for summary
+        summaryMarkdown,
+        [],
+        [],
         'summary-' + Date.now()
-      );
-      
-      toast.success("Summary added to chat!", { id: toastId });
+      )
+
+      toast.success("Summary added to chat!", { id: toastId })
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to generate summary.", { id: toastId });
+      console.error(err)
+      toast.error("Failed to generate summary.", { id: toastId })
     } finally {
-      setIsSummarizing(false);
+      setIsSummarizing(false)
     }
-  };
+  }
 
   return (
     <div className="border-b border-[var(--border-glass)] flex-shrink-0">
 
-      {/* Header with collapse toggle */}
+      {/* Header row */}
       <div className="w-full flex items-center justify-between px-4 py-1.5
-          border-b border-[var(--border-glass)] bg-white/[0.02]">
-        
+        border-b border-[var(--border-glass)] bg-white/[0.02]">
+
         <button
           onClick={onToggle}
-          className="flex items-center gap-2 text-[10px] text-gray-500 hover:text-gray-300 
-            transition-colors uppercase tracking-widest font-medium"
+          className="flex items-center gap-2 text-[10px] text-gray-500
+            hover:text-gray-300 transition-colors uppercase tracking-widest font-medium"
         >
           <span>
             {file.file_type === 'pdf'   ? '📄 Document' :
@@ -93,13 +101,21 @@ function MediaPanel({ file, isCollapsed, onToggle }) {
           {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
         </button>
 
-        {/* Bonus Feature: AI Summary Button */}
+        {/* Storage badge — shows where file is stored */}
+        {file.storage_type === 'cloudinary' && (
+          <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/10
+            border border-blue-500/20 text-blue-400 font-medium">
+            ☁️ CLOUD
+          </span>
+        )}
+
+        {/* AI Summary button */}
         {!isCollapsed && file.status === 'ready' && (
           <button
             onClick={handleGetSummary}
             disabled={isSummarizing}
-            className="flex items-center gap-1.5 text-[9px] font-bold px-2 py-0.5 rounded-md
-              bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 
+            className="flex items-center gap-1.5 text-[9px] font-bold px-2 py-0.5
+              rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400
               hover:bg-cyan-500/20 transition-all disabled:opacity-50"
           >
             <Sparkles size={10} className={isSummarizing ? "animate-spin" : ""} />
@@ -108,7 +124,7 @@ function MediaPanel({ file, isCollapsed, onToggle }) {
         )}
       </div>
 
-      {/* Content — collapsible */}
+      {/* Collapsible content */}
       {!isCollapsed && (
         <div className="bg-black/10">
           {file.file_type === 'audio' && (
@@ -120,7 +136,7 @@ function MediaPanel({ file, isCollapsed, onToggle }) {
           )}
           {file.file_type === 'video' && (
             <div className="p-4 flex justify-center">
-               <VideoPlayer
+              <VideoPlayer
                 fileId={file.id}
                 filename={file.filename}
                 filePath={filePath}
@@ -137,9 +153,9 @@ function MediaPanel({ file, isCollapsed, onToggle }) {
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate()
+  const navigate        = useNavigate()
   const { isAuthenticated } = useAuthStore()
-  const { activeFile } = useFileStore()
+  const { activeFile }  = useFileStore()
   const [mediaCollapsed, setMediaCollapsed] = useState(false)
 
   useEffect(() => {
@@ -162,9 +178,10 @@ export default function Dashboard() {
         <Sidebar />
 
         <main className="flex-1 overflow-hidden relative">
-          {/* Background decoration */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
-          
+          {/* Background glow decoration */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5
+            rounded-full blur-[100px] pointer-events-none" />
+
           {showDropZone ? (
             <DropZone />
           ) : (
@@ -193,14 +210,14 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Media Panel — compact and collapsible */}
+              {/* Media Panel */}
               <MediaPanel
                 file={activeFile}
                 isCollapsed={mediaCollapsed}
                 onToggle={() => setMediaCollapsed(!mediaCollapsed)}
               />
 
-              {/* Chat — fills ALL remaining space */}
+              {/* Chat */}
               <div className="flex-1 overflow-hidden min-h-0 bg-transparent">
                 <ChatWindow />
               </div>

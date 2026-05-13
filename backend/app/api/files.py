@@ -23,6 +23,8 @@ from app.core.exceptions import (
 )
 from app.core.rate_limiter import limiter
 from app.services.file_processor import process_file
+from app.services.storage_service import upload_file as cloud_upload
+from app.services.storage_service import delete_file as cloud_delete
 from app.services.vector_service import vector_service
 from app.services.cache_service import cache_delete_pattern
 from app.utils.file_utils import (
@@ -55,6 +57,8 @@ def _build_file_response(f: FileRecord) -> FileRecordResponse:
         duration=f.duration,
         page_count=f.page_count,
         error_message=f.error_message,
+        cloudinary_url=f.cloudinary_url,
+        storage_type=f.storage_type,
     )
 
 
@@ -113,7 +117,7 @@ async def upload_file(
     )
     await file_record.insert()
 
-    # ── Save file to disk ─────────────────────────────────────────────────────
+    # ── Save file to disk (always save locally first) ─────────────────────────
     file_path = get_upload_path(current_user.id, file_id, safe_filename)
 
     try:
@@ -152,6 +156,26 @@ async def upload_file(
         file_record.file_path = file_path
         await file_record.save()
 
+    # ── Upload to Cloudinary (if configured) ──────────────────────────────────
+    try:
+        storage_result = await cloud_upload(
+            file_path=file_path,
+            file_id=file_id,
+            user_id=current_user.id,
+        )
+        file_record.cloudinary_url      = storage_result.get("url")
+        file_record.cloudinary_public_id = storage_result.get("public_id")
+        file_record.storage_type        = storage_result.get("storage", "local")
+        await file_record.save()
+
+        logger.info(
+            f"File stored via {file_record.storage_type}: "
+            f"{file_record.cloudinary_url or file_path}"
+        )
+    except Exception as e:
+        # Non-fatal — continue with local storage
+        logger.warning(f"Cloudinary upload failed, using local: {e}")
+
     # ── Trigger background processing ─────────────────────────────────────────
     background_tasks.add_task(
         process_file,
@@ -174,6 +198,8 @@ async def upload_file(
         status=FileStatus.PROCESSING.value,
         size_bytes=file_size,
         message="File uploaded successfully. Processing started in background.",
+        cloudinary_url=file_record.cloudinary_url,
+        storage_type=file_record.storage_type,
     )
 
 
@@ -229,21 +255,26 @@ async def delete_file(
     if file_record.user_id != current_user.id:
         raise AuthorizationError("You don't have access to this file")
 
-    # Delete physical file from disk
+    # ── Delete from Cloudinary (if stored there) ──────────────────────────────
+    if file_record.cloudinary_public_id:
+        await cloud_delete(file_record.cloudinary_public_id)
+        logger.info(f"Deleted from Cloudinary: {file_record.cloudinary_public_id}")
+
+    # ── Delete physical file from local disk ──────────────────────────────────
     if file_record.file_path and os.path.exists(file_record.file_path):
         cleanup_file(file_record.file_path)
 
-    # Delete FAISS index
+    # ── Delete FAISS index ────────────────────────────────────────────────────
     vector_service.delete_index(file_id)
 
-    # Delete chunks from MongoDB
+    # ── Delete chunks from MongoDB ────────────────────────────────────────────
     await ChunkMetadata.find(ChunkMetadata.file_id == file_id).delete()
 
-    # Invalidate Redis cache
+    # ── Invalidate Redis cache ────────────────────────────────────────────────
     await cache_delete_pattern(f"chat:*{file_id}*")
     await cache_delete_pattern(f"summary:{file_id}")
 
-    # Delete file record
+    # ── Delete file record ────────────────────────────────────────────────────
     await file_record.delete()
 
     logger.info(f"File {file_id} deleted by user {current_user.id}")
